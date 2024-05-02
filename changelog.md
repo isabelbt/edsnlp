@@ -10,6 +10,7 @@
 - Added a new `eds.ner_overlap_scorer` to evaluate matches between two lists of entities, counting true when the dice overlap is above a given threshold
 - `edsnlp.load` now accepts EDS-NLP models from the huggingface hub 🤗 !
 - New `python -m edsnlp.package` command to package a model for the huggingface hub or pypi-like registries
+- Expose the defaults patterns of `eds.negation`, `eds.hypothesis`, `eds.family`, `eds.history` and `eds.reported_speech` under a `eds.negation.default_patterns` attribute
 
 ### Changed
 
