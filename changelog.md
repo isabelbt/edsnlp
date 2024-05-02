@@ -11,6 +11,7 @@
 - `edsnlp.load` now accepts EDS-NLP models from the huggingface hub 🤗 !
 - New `python -m edsnlp.package` command to package a model for the huggingface hub or pypi-like registries
 - Expose the defaults patterns of `eds.negation`, `eds.hypothesis`, `eds.family`, `eds.history` and `eds.reported_speech` under a `eds.negation.default_patterns` attribute
+- Added a `context_getter` SpanGetter argument to the `eds.matcher` class to only retrieve entities inside the spans returned by the getter
 
 ### Changed
 
