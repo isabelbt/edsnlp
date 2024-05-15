@@ -6,6 +6,9 @@
 
 - Added binary distribution for linux aarch64 (Streamlit's environment)
 - Added new separator option in eds.table and new input check
+- Added tables processing in eds.measurement
+- Added 'all' as possible input in eds.measurement measurements config
+- Added new units in eds.measurement
 
 ### Changed
 
