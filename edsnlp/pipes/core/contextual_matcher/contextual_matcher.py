@@ -252,11 +252,7 @@ class ContextualMatcher(BaseNERComponent):
         source = span.label_
         to_keep = True
         for exclude in self.patterns[source].exclude:
-            snippet = get_window(
-                doclike=span,
-                window=exclude.window,
-                limit_to_sentence=exclude.limit_to_sentence,
-            )
+            snippet = exclude.window(span)
 
             if next(exclude.matcher(snippet, as_spans=True), None) is not None:
                 to_keep = False
@@ -264,11 +260,7 @@ class ContextualMatcher(BaseNERComponent):
                 break
 
         for include in self.patterns[source].include:
-            snippet = get_window(
-                doclike=span,
-                window=include.window,
-                limit_to_sentence=include.limit_to_sentence,
-            )
+            snippet = include.window(span)
 
             if next(include.matcher(snippet, as_spans=True), None) is None:
                 to_keep = False
@@ -308,13 +300,7 @@ class ContextualMatcher(BaseNERComponent):
         for assign in self.patterns[source].assign:
             assign: SingleAssignModel
             window = assign.window
-            limit_to_sentence = assign.limit_to_sentence
-
-            snippet = get_window(
-                doclike=span,
-                window=window,
-                limit_to_sentence=limit_to_sentence,
-            )
+            snippet = window(span)
 
             matcher: RegexMatcher = assign.matcher
             if matcher is not None:

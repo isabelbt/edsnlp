@@ -1,37 +1,27 @@
 import re
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
-import regex
-from pydantic import BaseModel, Extra, validator
+from pydantic import BaseModel, Extra, root_validator
 
 from edsnlp.matchers.utils import ListOrStr
-from edsnlp.utils.span_getters import SpanGetterArg
+from edsnlp.utils.span_getters import Context, SentenceContext, SpanGetterArg
 from edsnlp.utils.typing import AsList
 
 Flags = Union[re.RegexFlag, int]
-Window = Union[
-    Tuple[int, int],
-    List[int],
-    int,
-]
 
 
-def normalize_window(cls, v):
-    if v is None:
-        return v
-    if isinstance(v, list):
-        assert (
-            len(v) == 2
-        ), "`window` should be a tuple/list of two integer, or a single integer"
-        v = tuple(v)
-    if isinstance(v, int):
-        assert v != 0, "The provided `window` should not be 0"
-        if v < 0:
-            return (v, 0)
-        if v > 0:
-            return (0, v)
-    assert v[0] < v[1], "The provided `window` should contain at least 1 token"
-    return v
+def validate_window(cls, values):
+    if isinstance(values.get("regex"), str):
+        values["regex"] = [values["regex"]]
+    window = values.get("window")
+    if window is None or isinstance(window, (int, tuple, list)):
+        values["limit_to_sentence"] = True
+    window = values.get("window")
+    if window is not None:
+        values["window"] = Context.validate(window)
+    if values.get("limit_to_sentence"):
+        values["window"] = values.get("window") & SentenceContext(0, 0)
+    return values
 
 
 class AssignDict(dict):
@@ -101,9 +91,10 @@ class SingleExcludeModel(BaseModel):
     ----------
     regex: ListOrStr
         A single Regex or a list of Regexes
-    window: Optional[Window]
+    window: Optional[Context]
         Size of the context to use (in number of words). You can provide the window as:
 
+            - A [context string][context-string]
             - A positive integer, in this case the used context will be taken **after**
               the extraction
             - A negative integer, in this case the used context will be taken **before**
@@ -121,19 +112,13 @@ class SingleExcludeModel(BaseModel):
     """
 
     regex: ListOrStr = []
-    window: Optional[Window] = None
-    limit_to_sentence: Optional[bool] = True
+    limit_to_sentence: Optional[bool] = None
+    window: Optional[Context] = None
     regex_flags: Optional[Flags] = None
     regex_attr: Optional[str] = None
     matcher: Optional[Any] = None
 
-    @validator("regex", allow_reuse=True)
-    def exclude_regex_validation(cls, v):
-        if isinstance(v, str):
-            v = [v]
-        return v
-
-    _normalize_window = validator("window", allow_reuse=True)(normalize_window)
+    validate_window = root_validator(pre=True, allow_reuse=True)(validate_window)
 
 
 class SingleIncludeModel(BaseModel):
@@ -146,9 +131,10 @@ class SingleIncludeModel(BaseModel):
     ----------
     regex: ListOrStr
         A single Regex or a list of Regexes
-    window: Optional[Window]
+    window: Optional[Context]
         Size of the context to use (in number of words). You can provide the window as:
 
+            - A [context string][context-string]
             - A positive integer, in this case the used context will be taken **after**
               the extraction
             - A negative integer, in this case the used context will be taken **before**
@@ -166,19 +152,13 @@ class SingleIncludeModel(BaseModel):
     """
 
     regex: ListOrStr = []
-    window: Optional[Window] = None
-    limit_to_sentence: Optional[bool] = True
+    limit_to_sentence: Optional[bool] = None
+    window: Optional[Context] = None
     regex_flags: Optional[Flags] = None
     regex_attr: Optional[str] = None
     matcher: Optional[Any] = None
 
-    @validator("regex", allow_reuse=True)
-    def exclude_regex_validation(cls, v):
-        if isinstance(v, str):
-            v = [v]
-        return v
-
-    _normalize_window = validator("window", allow_reuse=True)(normalize_window)
+    validate_window = root_validator(pre=True, allow_reuse=True)(validate_window)
 
 
 class ExcludeModel(AsList[SingleExcludeModel]):
@@ -204,9 +184,10 @@ class SingleAssignModel(BaseModel):
     ----------
     name: ListOrStr
         A name (string)
-    window: Optional[Window]
+    window: Optional[Context]
         Size of the context to use (in number of words). You can provide the window as:
 
+        - A [context string][context-string]
         - A positive integer, in this case the used context will be taken **after**
           the extraction
         - A negative integer, in this case the used context will be taken **before**
@@ -217,7 +198,7 @@ class SingleAssignModel(BaseModel):
     span_getter: Optional[SpanGetterArg]
         A span getter to pick the assigned spans from already extracted entities
         in the doc.
-    regex: Optional[Window]
+    regex: Optional[Context]
         A dictionary where keys are labels and values are **Regexes with a single
         capturing group**
     replace_entity: Optional[bool]
@@ -233,10 +214,10 @@ class SingleAssignModel(BaseModel):
     """
 
     name: str
-    regex: Optional[str] = None
+    regex: ListOrStr = []
     span_getter: Optional[SpanGetterArg] = None
-    window: Optional[Window] = None
-    limit_to_sentence: Optional[bool] = True
+    limit_to_sentence: Optional[bool] = None
+    window: Optional[Context] = None
     regex_flags: Optional[Flags] = None
     regex_attr: Optional[str] = None
     replace_entity: bool = False
@@ -245,21 +226,7 @@ class SingleAssignModel(BaseModel):
 
     matcher: Optional[Any] = None
 
-    @validator("regex", allow_reuse=True)
-    def check_single_regex_group(cls, pat):
-        if pat is None:
-            return pat
-        compiled_pat = regex.compile(
-            pat
-        )  # Using regex to allow multiple fgroups with same name
-        n_groups = compiled_pat.groups
-        assert (
-            n_groups == 1
-        ), f"The pattern {pat} should have exactly one capturing group, not {n_groups}"
-
-        return pat
-
-    _normalize_window = validator("window", allow_reuse=True)(normalize_window)
+    validate_window = root_validator(pre=True, allow_reuse=True)(validate_window)
 
 
 class AssignModel(AsList[SingleAssignModel]):
