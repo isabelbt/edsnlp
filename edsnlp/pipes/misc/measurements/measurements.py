@@ -8,6 +8,7 @@ from itertools import repeat
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import regex
+from loguru import logger
 from spacy.tokens import Doc, Span
 from typing_extensions import Literal, NotRequired, TypedDict
 
@@ -129,7 +130,10 @@ class UnitRegistry:
         for k, v in self.config.items():
             if (v["dim"] == dim) and (v["scale"] == 1) and (v["degree"] == degree):
                 return k
-        return ""
+        raise AttributeError(
+            f"units_config is not properly defined \
+            since {dim} and {degree} can't be converted."
+        )
 
     def dims_to_units(self, dims):
         base_unit, per_unit = "", ""
@@ -447,6 +451,7 @@ class MeasurementsMatcher(BaseNERComponent):
           }
         }
         ```
+        Set measurements="all" to extract all measurements from units_config file.
     number_terms: Dict[str, List[str]
         A mapping of numbers to their lexical variants
     stopwords: List[str]
@@ -513,7 +518,19 @@ class MeasurementsMatcher(BaseNERComponent):
           merge_mode: Literal["intersect", "align"] = "intersect",
           as_ents: bool = False,
           span_setter: Optional[SpanSetterArg] = None,
+          use_tables : bool = True
     ):
+
+        self.tables = use_tables and (
+            "eds.tables" in nlp.pipe_names or "tables" in nlp.pipe_names
+        )
+        if use_tables and not self.tables:
+            logger.warning(
+                "You have requested that the pipeline use annotations "
+                "provided by the `table` pipeline, but it was not set. "
+                "Skipping that step."
+            )
+
         self.all_measurements = (measurements == "all")
         if self.all_measurements:
             measurements = []
@@ -759,9 +776,6 @@ class MeasurementsMatcher(BaseNERComponent):
         regex_matches = list(self.regex_matcher(doc, as_spans=True))
         term_matches = list(self.term_matcher(doc, as_spans=True))
 
-        tables = self.table_matcher(doc).spans["tables"]
-        table_matches = [table for table in tables]
-
         # Detect unit parts and compose them into units
         units = self.extract_units(term_matches)
         unit_label_hashes = {unit.label for unit in units}
@@ -800,7 +814,7 @@ class MeasurementsMatcher(BaseNERComponent):
             ]
         )
 
-        return matches_and_is_sentence_end, unit_label_hashes, table_matches
+        return matches_and_is_sentence_end, unit_label_hashes
 
     def extract_measurements(self, doclike: Doc):
         """
@@ -815,7 +829,15 @@ class MeasurementsMatcher(BaseNERComponent):
         List[Span]
         """
         doc = doclike.doc if isinstance(doclike, Span) else doclike
-        matches, unit_label_hashes, table_matches = self.get_matches(doclike)
+
+        table_matches = []
+        if self.tables:
+            table_matches = [
+                Span(doc, table.start, table.end)
+                for table in doc.spans["tables"]
+            ]
+
+        matches, unit_label_hashes = self.get_matches(doclike)
         # Make match slice function to query them
         def get_matches_after(i):
             anchor = matches[i][0]

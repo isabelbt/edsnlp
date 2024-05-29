@@ -1,3 +1,75 @@
+import itertools
+
+
+def update_config_per(configs: dict) -> dict:
+    output_configs = {}
+    for key, config in configs.items():
+        if "per" in config.keys():
+            per_config = {
+                "dim": config["dim"],
+                "degree": -1 * config["degree"],
+                "scale": 1 / config["scale"],
+                "terms": config["per"],
+                "followed_by": None,
+            }
+            config.pop("per")
+            output_configs.update({f"per_{key}": per_config})
+        output_configs.update({key: config})
+    return output_configs
+
+
+def get_scaled_terms(terms, scale_prefix):
+    """Generate scaled terms."""
+    return [f"{scale}{term}" for term, scale in itertools.product(terms, scale_prefix)]
+
+
+def create_scaled_config(key, config, scale_prefix, scale_value):
+    """Create a scaled configuration dictionary."""
+    if key.startswith("per_"):
+        scale_value = 1 / scale_value
+        scaled_key = f"per_{scale_prefix[0]}{key[4:]}"
+    else:
+        scaled_key = f"{scale_prefix[0]}{key}"
+
+    return {
+        scaled_key: {
+            "dim": config["dim"],
+            "degree": config["degree"],
+            "scale": scale_value,
+            "terms": get_scaled_terms(config["terms"], scale_prefix),
+            "followed_by": None,
+        }
+    }
+
+
+def update_config_scale(configs):
+    """Update configurations with scale units and values."""
+    scales_prefixes = [
+        ("k", "kilo", "kilo-"),
+        ("h", "hecto", "hecto-"),
+        ("da", "deca", "deca-"),
+        ("d", "deci", "deci-"),
+        ("c", "centi", "centi-"),
+        ("m", "milli", "milli-"),
+        ("μ", "u", r"µ", "micro", "micro-"),
+        ("n", "nano", "nano-"),
+        ("p", "pico", "pico-"),
+        ("f", "femto", "femto-"),
+    ]
+    scales_values = [1e3, 1e2, 1e1, 1e-1, 1e-2, 1e-3, 1e-6, 1e-9, 1e-12, 1e-15]
+
+    output_configs = {}
+
+    for key, config in configs.items():
+        for scale_prefix, scale_value in zip(scales_prefixes, scales_values):
+            scaled_config = create_scaled_config(key, config, scale_prefix, scale_value)
+            output_configs.update(scaled_config)
+
+        output_configs[key] = config
+
+    return output_configs
+
+
 number_terms = {
     "0.125": ["⅛"],
     "0.16666666": ["⅙"],
@@ -57,516 +129,6 @@ number_regex = r"""(?x)
 )?"""
 
 
-units_config = {
-    # Lengths
-    "µm": {
-        "dim": "length",
-        "degree": 1,
-        "scale": 1e-4,
-        "terms": [
-            "micrometre",
-            "micrometres",
-            "micro-metre",
-            "micrometres",
-            "µm",
-            "um",
-        ],
-        "followed_by": None,
-    },
-    "mm": {
-        "dim": "length",
-        "degree": 1,
-        "scale": 1e-1,
-        "terms": ["millimetre", "millimetres", "milimetre", "milimetres", "mm"],
-        "followed_by": None,
-    },
-    "cm": {
-        "dim": "length",
-        "degree": 1,
-        "scale": 1e0,
-        "terms": ["centimetre", "centimetres", "cm"],
-        "followed_by": None,
-    },
-    "dm": {
-        "dim": "length",
-        "degree": 1,
-        "scale": 1e1,
-        "terms": ["decimetre", "decimetres", "dm"],
-        "followed_by": None,
-    },
-    "m": {
-        "dim": "length",
-        "degree": 1,
-        "scale": 1e2,
-        "terms": ["metre", "metres", "m"],
-        "followed_by": "cm",
-    },
-    # Weights
-    "µg": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e-3,
-        "terms": [
-            "microgramme",
-            "microgrammes",
-            "micro-gramme",
-            "microgrammes",
-            "µg",
-        ],
-        "followed_by": None,
-    },
-    "mg": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e0,
-        "terms": [
-            "milligramme",
-            "miligramme",
-            "milligrammes",
-            "miligrammes",
-            "mgr",
-            "mg",
-        ],
-        "followed_by": None,
-    },
-    "cg": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e1,
-        "terms": ["centigramme", "centigrammes", "cg", "cgr"],
-        "followed_by": None,
-    },
-    "dg": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e2,
-        "terms": ["decigramme", "decigrammes", "dgr", "dg"],
-        "followed_by": None,
-    },
-    "g": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e3,
-        "terms": ["gramme", "grammes", "gr", "g"],
-        "followed_by": None,
-    },
-    "kg": {
-        "dim": "mass",
-        "degree": 1,
-        "scale": 1e6,
-        "terms": ["kilo", "kilogramme", "kilogrammes", "kgr", "kg"],
-        "followed_by": "g",
-    },
-    # Durations
-    "second": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 1,
-        "terms": ["seconde", "secondes", "s"],
-        "followed_by": None,
-    },
-    "minute": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 60,
-        "terms": ["mn", "min", "minute", "minutes"],
-        "followed_by": "second",
-    },
-    "hour": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 3600,
-        "terms": ["heure", "heures", "h"],
-        "followed_by": "minute",
-    },
-    "day": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 3600 * 24,
-        "terms": ["jour", "jours", "j"],
-        "followed_by": None,
-    },
-    "month": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 3600 * 24 * 30.4167,
-        "terms": ["mois"],
-        "followed_by": None,
-    },
-    "week": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 3600 * 24 * 7,
-        "terms": ["semaine", "semaines", "sem"],
-        "followed_by": None,
-    },
-    "year": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 3600 * 24 * 365.25,
-        "terms": ["an", "année", "ans", "années"],
-        "followed_by": None,
-    },
-    # Angle
-    "arc-second": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 2 / 60.0,
-        "terms": ['"', "''"],
-        "followed_by": None,
-    },
-    "arc-minute": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 2,
-        "terms": ["'"],
-        "followed_by": "arc-second",
-    },
-    "degree": {
-        "dim": "time",
-        "degree": 1,
-        "scale": 120,
-        "terms": ["degre", "°", "deg"],
-        "followed_by": "arc-minute",
-    },
-    # Temperature
-    "celsius": {
-        "dim": "temperature",
-        "degree": 1,
-        "scale": 1,
-        "terms": ["°C", "° celsius", "celsius"],
-        "followed_by": None,
-    },
-    # Volumes
-    "ml": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e0,
-        "terms": ["mililitre", "millilitre", "mililitres", "millilitres", "ml"],
-        "followed_by": None,
-    },
-    "cl": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e1,
-        "terms": ["centilitre", "centilitres", "cl"],
-        "followed_by": None,
-    },
-    "dl": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e2,
-        "terms": ["decilitre", "decilitres", "dl"],
-        "followed_by": None,
-    },
-    "l": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e3,
-        "terms": ["litre", "litres", "l", "dm3"],
-        "followed_by": "ml",
-    },
-    "cac": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 5e0,
-        "terms": ["cac", "c.a.c", "cuillere à café", "cuillères à café"],
-        "followed_by": None,
-    },
-    "goutte": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 5e-2,
-        "terms": ["gt", "goutte", "gouttes"],
-        "followed_by": None,
-    },
-    "mm3": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e-3,
-        "terms": ["mm3", "mm³"],
-        "followed_by": None,
-    },
-    "cm3": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e0,
-        "terms": ["cm3", "cm³", "cc"],
-        "followed_by": None,
-    },
-    "dm3": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e3,
-        "terms": ["dm3", "dm³"],
-        "followed_by": None,
-    },
-    "m3": {
-        "dim": "length",
-        "degree": 3,
-        "scale": 1e6,
-        "terms": ["m3", "m³"],
-        "followed_by": None,
-    },
-    # Surfaces
-    "µm2": {
-        "dim": "length",
-        "degree": 2,
-        "scale": 1e-8,
-        "terms": ["µm2", "µm²"],
-        "followed_by": None,
-    },
-    "mm2": {
-        "dim": "length",
-        "degree": 2,
-        "scale": 1e-2,
-        "terms": ["mm2", "mm²"],
-        "followed_by": None,
-    },
-    "cm2": {
-        "dim": "length",
-        "degree": 2,
-        "scale": 1e0,
-        "terms": ["cm2", "cm²"],
-        "followed_by": None,
-    },
-    "dm2": {
-        "dim": "length",
-        "degree": 2,
-        "scale": 1e2,
-        "terms": ["dm2", "dm²"],
-        "followed_by": None,
-    },
-    "m2": {
-        "dim": "length",
-        "degree": 2,
-        "scale": 1e4,
-        "terms": ["m2", "m²"],
-        "followed_by": None,
-    },
-    # International units
-    "mui": {
-        "dim": "ui",
-        "degree": 1,
-        "scale": 1e0,
-        "terms": ["mui", "m ui"],
-        "followed_by": None,
-    },
-    "dui": {
-        "dim": "ui",
-        "degree": 1,
-        "scale": 1e1,
-        "terms": ["dui", "d ui"],
-        "followed_by": None,
-    },
-    "cui": {
-        "dim": "ui",
-        "degree": 1,
-        "scale": 1e2,
-        "terms": ["cui", "c ui"],
-        "followed_by": None,
-    },
-    "ui": {
-        "dim": "ui",
-        "degree": 1,
-        "scale": 1e3,
-        "terms": ["ui"],
-        "followed_by": None,
-    },
-    # Inverse
-    "per_µm": {
-        "dim": "length",
-        "degree": -1,
-        "scale": 1e4,
-        "terms": ["µm-1"],
-        "followed_by": None,
-    },
-    "per_mm": {
-        "dim": "length",
-        "degree": -1,
-        "scale": 1e1,
-        "terms": ["mm-1"],
-        "followed_by": None,
-    },
-    "per_cm": {
-        "dim": "length",
-        "degree": -1,
-        "scale": 1e0,
-        "terms": ["cm-1"],
-        "followed_by": None,
-    },
-    "per_dm": {
-        "dim": "length",
-        "degree": -1,
-        "scale": 1e-1,
-        "terms": ["dm-1"],
-        "followed_by": None,
-    },
-    "per_m": {
-        "dim": "length",
-        "degree": -1,
-        "scale": 1e-2,
-        "terms": ["m-1"],
-        "followed_by": None,
-    },
-    "per_mg": {
-        "dim": "mass",
-        "degree": -1,
-        "scale": 1e-0,
-        "terms": ["mgr-1", "mg-1", "mgr⁻¹", "mg⁻¹"],
-        "followed_by": None,
-    },
-    "per_cg": {
-        "dim": "mass",
-        "degree": -1,
-        "scale": 1e-1,
-        "terms": ["cg-1", "cgr-1", "cg⁻¹", "cgr⁻¹"],
-        "followed_by": None,
-    },
-    "per_dg": {
-        "dim": "mass",
-        "degree": -1,
-        "scale": 1e-2,
-        "terms": ["dgr-1", "dg-1", "dgr⁻¹", "dg⁻¹"],
-        "followed_by": None,
-    },
-    "per_g": {
-        "dim": "mass",
-        "degree": -1,
-        "scale": 1e-3,
-        "terms": ["gr-1", "g-1", "gr⁻¹", "g⁻¹"],
-        "followed_by": None,
-    },
-    "per_kg": {
-        "dim": "mass",
-        "degree": -1,
-        "scale": 1e-6,
-        "terms": ["kgr-1", "kg-1", "kgr⁻¹", "kg⁻¹"],
-        "followed_by": None,
-    },
-    "per_ml": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-0,
-        "terms": ["ml-1", "ml⁻¹"],
-        "followed_by": None,
-    },
-    "per_cl": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-1,
-        "terms": ["cl-1", "cl⁻¹"],
-        "followed_by": None,
-    },
-    "per_dl": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-2,
-        "terms": ["dl-1", "dl⁻¹"],
-        "followed_by": None,
-    },
-    "per_l": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-3,
-        "terms": ["l-1", "l⁻¹"],
-        "followed_by": None,
-    },
-    "per_mm3": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e3,
-        "terms": ["mm-3", "mm⁻³"],
-        "followed_by": None,
-    },
-    "per_cm3": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-0,
-        "terms": ["cm-3", "cm⁻³", "cc-1", "cc⁻¹"],
-        "followed_by": None,
-    },
-    "per_dm3": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-3,
-        "terms": ["dm-3", "dm⁻³"],
-        "followed_by": None,
-    },
-    "per_m3": {
-        "dim": "length",
-        "degree": -3,
-        "scale": 1e-6,
-        "terms": ["m-3", "m⁻³"],
-        "followed_by": None,
-    },
-    "per_mui": {
-        "dim": "ui",
-        "degree": -1,
-        "scale": 1e-0,
-        "terms": ["mui-1", "mui⁻¹"],
-        "followed_by": None,
-    },
-    "per_dui": {
-        "dim": "ui",
-        "degree": -1,
-        "scale": 1e-1,
-        "terms": ["dui-1", "dui⁻¹"],
-        "followed_by": None,
-    },
-    "per_cui": {
-        "dim": "ui",
-        "degree": -1,
-        "scale": 1e-2,
-        "terms": ["cui-1", "cui⁻¹"],
-        "followed_by": None,
-    },
-    "per_ui": {
-        "dim": "ui",
-        "degree": -1,
-        "scale": 1e-3,
-        "terms": ["ui-1", "ui⁻¹"],
-        "followed_by": None,
-    },
-    # Surfaces
-    "per_µm2": {
-        "dim": "length",
-        "degree": -2,
-        "scale": 1e8,
-        "terms": ["µm-2", "µm⁻²"],
-        "followed_by": None,
-    },
-    "per_mm2": {
-        "dim": "length",
-        "degree": -2,
-        "scale": 1e2,
-        "terms": ["mm-2", "mm⁻²"],
-        "followed_by": None,
-    },
-    "per_cm2": {
-        "dim": "length",
-        "degree": -2,
-        "scale": 1e-0,
-        "terms": ["cm-2", "cm⁻²"],
-        "followed_by": None,
-    },
-    "per_dm2": {
-        "dim": "length",
-        "degree": -2,
-        "scale": 1e-2,
-        "terms": ["dm-2", "dm⁻²"],
-        "followed_by": None,
-    },
-    "per_m2": {
-        "dim": "length",
-        "degree": -2,
-        "scale": 1e-4,
-        "terms": ["m-2", "m⁻²"],
-        "followed_by": None,
-    },
-}
-
-
 common_measurements = {
     "weight": {
         "unit": "kg",
@@ -613,7 +175,7 @@ common_measurements = {
 
 unit_divisors = ["/", "par"]
 
-stopwords = ["par", "sur", "de", "a", ",", "et", "-"]
+stopwords = ["par", "sur", "de", "a", ",", "et", "-", "à"]
 
 # Should we only make accented patterns and expect the user to use
 # `eds.normalizer` component first ?
@@ -628,3 +190,189 @@ range_patterns = [
     (None, "à"),
     (None, "-"),
 ]
+
+
+units_config = {
+    "g": {
+        "dim": "mass",
+        "degree": 1,
+        "scale": 1,
+        "terms": ["gramme", "grammes", "gr", "g"],
+        "per": ["g-1", "gr-1", "gr⁻¹", "g⁻¹"],
+        "followed_by": None,
+    },
+    "m": {
+        "dim": "length",
+        "degree": 1,
+        "scale": 1,
+        "terms": ["metre", "metres", "m"],
+        "per": ["m-1", "m⁻¹"],
+        "followed_by": "cm",
+    },
+    "m2": {
+        "dim": "length",
+        "degree": 2,
+        "scale": 1,
+        "terms": ["m2", "m²"],
+        "per": ["m-2", "m⁻²"],
+        "followed_by": None,
+    },
+    "m3": {
+        "dim": "length",
+        "degree": 3,
+        "scale": 1,
+        "terms": ["m3", "m³"],
+        "per": ["m-3", "m⁻³"],
+        "followed_by": None,
+    },
+    "l": {
+        "dim": "length",
+        "degree": 3,
+        "scale": 1e3,
+        "terms": ["litre", "litres", "l", "dm3"],
+        "per": ["l-1", "l⁻¹"],
+        "followed_by": "ml",
+    },
+    "mol": {
+        "dim": "mole",
+        "degree": 1,
+        "scale": 1,
+        "terms": ["mol", "mole", "moles"],
+        "followed_by": None,
+    },
+    "ui": {
+        "dim": "ui",
+        "degree": 1,
+        "scale": 1,
+        "terms": ["ui", "u"],
+        "per": ["ui-1", "ui⁻¹"],
+        "followed_by": None,
+    },
+    "Pa": {"dim": "Pa", "degree": 1, "scale": 1, "terms": ["Pa"], "followed_by": None},
+}
+
+units_config = update_config_per(units_config)
+units_config = update_config_scale(units_config)
+units_config["kg"]["followed_by"] = "g"
+units_config["m"]["followed_by"] = "cm"
+
+units_config.update(
+    {
+        "%": {"dim": "%", "degree": 1, "scale": 1, "terms": ["%"], "followed_by": None},
+        "log": {
+            "dim": "log",
+            "degree": 1,
+            "scale": 1,
+            "terms": ["log"],
+            "followed_by": None,
+        },
+        "mmHg": {
+            "dim": "mmHg",
+            "degree": 1,
+            "scale": 1,
+            "terms": ["mmHg"],
+            "followed_by": None,
+        },
+        "x10*9": {
+            "dim": "count",
+            "degree": 1,
+            "scale": 1,
+            "terms": ["x10*9"],
+            "followed_by": None,
+        },
+        # Durations
+        "second": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 1,
+            "terms": ["seconde", "secondes", "s"],
+            "followed_by": None,
+        },
+        "minute": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 60,
+            "terms": ["mn", "min", "minute", "minutes"],
+            "followed_by": "second",
+        },
+        "hour": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 3600,
+            "terms": ["heure", "heures", "h"],
+            "followed_by": "minute",
+        },
+        "day": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 3600 * 24,
+            "terms": ["jour", "jours", "j"],
+            "followed_by": None,
+        },
+        "month": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 3600 * 24 * 30.4167,
+            "terms": ["mois"],
+            "followed_by": None,
+        },
+        "week": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 3600 * 24 * 7,
+            "terms": ["semaine", "semaines", "sem"],
+            "followed_by": None,
+        },
+        "year": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 3600 * 24 * 365.25,
+            "terms": ["an", "année", "ans", "années"],
+            "followed_by": None,
+        },
+        # Angle
+        "arc-second": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 2 / 60.0,
+            "terms": ['"', "''"],
+            "followed_by": None,
+        },
+        "arc-minute": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 2,
+            "terms": ["'"],
+            "followed_by": "arc-second",
+        },
+        "degree": {
+            "dim": "time",
+            "degree": 1,
+            "scale": 120,
+            "terms": ["degre", "°", "deg"],
+            "followed_by": "arc-minute",
+        },
+        # Temperature
+        "celsius": {
+            "dim": "temperature",
+            "degree": 1,
+            "scale": 1,
+            "terms": ["°C", "° celsius", "celsius"],
+            "followed_by": None,
+        },
+        "cac": {
+            "dim": "length",
+            "degree": 3,
+            "scale": 5e0,
+            "terms": ["cac", "c.a.c", "cuillere à café", "cuillères à café"],
+            "followed_by": None,
+        },
+        "goutte": {
+            "dim": "length",
+            "degree": 3,
+            "scale": 5e-2,
+            "terms": ["gt", "goutte", "gouttes"],
+            "followed_by": None,
+        },
+    }
+)
