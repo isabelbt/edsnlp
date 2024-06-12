@@ -1,5 +1,4 @@
 import abc
-import ast
 import re
 import unicodedata
 from collections import defaultdict
@@ -53,7 +52,7 @@ class UnitlessPatternConfig(TypedDict):
 
 class UnitlessPatternConfigWithName(TypedDict):
     terms: List[str]
-    ranges: List[UnitlessRange]
+    ranges: NotRequired[List[UnitlessRange]]
     name: str
 
 
@@ -110,7 +109,7 @@ class UnitRegistry:
                     "scale": 1 / unit_config["scale"],
                 }
 
-    @lru_cache(maxsize=-1)
+    @lru_cache(maxsize=1000)
     def parse_unit(self, unit: str) -> Tuple[str, float]:
         degrees = defaultdict(lambda: [])
         scale = 1
@@ -124,29 +123,6 @@ class UnitRegistry:
             if sum(v) != 0
         }
         return str(dict(sorted(degrees.items()))), scale
-
-    def dim_to_unit(self, dim, degree):
-        for k, v in self.config.items():
-            if (v["dim"] == dim) and (v["scale"] == 1) and (v["degree"] == degree):
-                return k
-        raise AttributeError(
-            f"units_config is not properly defined \
-            since {dim} and {degree} can't be converted."
-        )
-
-    @lru_cache(maxsize=1000)
-    def dims_to_unit(self, dims_str):
-        dims = ast.literal_eval(dims_str)
-        base_unit, per_unit = "", ""
-        for dim, degree in dims.items():
-            unit = self.dim_to_unit(dim, degree)
-            if degree < 0:
-                per_unit += unit
-            else:
-                base_unit = unit
-        per_unit = f"_{per_unit}" if per_unit != "" else ""
-
-        return f"{base_unit}{per_unit}"
 
 
 class SimpleMeasurement(Measurement):
@@ -919,11 +895,14 @@ class MeasurementsMatcher(BaseNERComponent):
                         # Find out the number's row
                         for _, row in table_pd.iterrows():
                             start_line = next((item.start for item in row
-                                               if item is not None
+                                               if item is not None), None)
                             end_line = next((item.end for item in reversed(row)
-                                             if hasattr(item, 'end')), None)
+                                             if item is not None), None)
+                            if start_line is None:
+                                continue
                             def is_within_row(x):
                                 return (x.start >= start_line) and (x.end <= end_line)
+
                             if is_within_row(number):
                                 # Check if any unit in the same row
                                 if unit_text and is_within_row(unit_text):
@@ -1011,10 +990,10 @@ class MeasurementsMatcher(BaseNERComponent):
                 continue
 
             if self.all_measurements:
-                # We need to compute the detected unit
-                ent.label_ = self.unit_registry.dims_to_units(dims)
-                if not Span.has_extension(ent.label_):
-                    Span.set_extension(ent.label_, default=None)
+                if not Span.has_extension(unit_norm):
+                    Span.set_extension(unit_norm, default=None)
+                ent.label_ = unit_norm
+
             else:
                 ent.label_ = self.measure_names[dims]
             ent._.set(
