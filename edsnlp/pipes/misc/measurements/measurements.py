@@ -134,7 +134,9 @@ class UnitRegistry:
             since {dim} and {degree} can't be converted."
         )
 
-    def dims_to_units(self, dims):
+    @lru_cache(maxsize=1000)
+    def dims_to_unit(self, dims_str):
+        dims = ast.literal_eval(dims_str)
         base_unit, per_unit = "", ""
         for dim, degree in dims.items():
             unit = self.dim_to_unit(dim, degree)
@@ -450,7 +452,7 @@ class MeasurementsMatcher(BaseNERComponent):
           }
         }
         ```
-        Set measurements="all" to extract all measurements from units_config file.
+        Set `measurements="all"` to extract all measurements from units_config file.
     number_terms: Dict[str, List[str]
         A mapping of numbers to their lexical variants
     stopwords: List[str]
@@ -520,10 +522,10 @@ class MeasurementsMatcher(BaseNERComponent):
           use_tables : bool = True
     ):
 
-        self.tables = use_tables and (
+        self.use_tables = use_tables and (
             "eds.tables" in nlp.pipe_names or "tables" in nlp.pipe_names
         )
-        if use_tables and not self.tables:
+        if use_tables and not self.use_tables:
             logger.warning(
                 "You have requested that the pipeline use annotations "
                 "provided by the `table` pipeline, but it was not set. "
@@ -829,11 +831,8 @@ class MeasurementsMatcher(BaseNERComponent):
         doc = doclike.doc if isinstance(doclike, Span) else doclike
 
         table_matches = []
-        if self.tables:
-            table_matches = [
-                Span(doc, table.start, table.end)
-                for table in doc.spans["tables"]
-            ]
+        if self.use_tables:
+            table_matches = list(doc.spans["tables"])
 
         matches, unit_label_hashes = self.get_matches(doclike)
         # Make match slice function to query them
@@ -915,16 +914,16 @@ class MeasurementsMatcher(BaseNERComponent):
             # Check if number is in table with a unit in the same row
             if unit_norm is None :
                 for table in table_matches:
-                    if (number.start >= table.start) & (number.end <= table.end):
+                    if (number.start >= table.start) and (number.end <= table.end):
                         table_pd = table._.to_pd_table(as_spans=True)
                         # Find out the number's row
                         for _, row in table_pd.iterrows():
                             start_line = next((item.start for item in row
-                                               if hasattr(item, 'start')), None)
+                                               if item is not None
                             end_line = next((item.end for item in reversed(row)
                                              if hasattr(item, 'end')), None)
                             def is_within_row(x):
-                                return (x.start >= start_line) & (x.end <= end_line)
+                                return (x.start >= start_line) and (x.end <= end_line)
                             if is_within_row(number):
                                 # Check if any unit in the same row
                                 if unit_text and is_within_row(unit_text):
@@ -1013,7 +1012,7 @@ class MeasurementsMatcher(BaseNERComponent):
 
             if self.all_measurements:
                 # We need to compute the detected unit
-                ent.label_ = self.unit_registry.dims_to_units(ast.literal_eval(dims))
+                ent.label_ = self.unit_registry.dims_to_units(dims)
                 if not Span.has_extension(ent.label_):
                     Span.set_extension(ent.label_, default=None)
             else:
