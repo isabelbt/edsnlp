@@ -24,7 +24,6 @@ from edsnlp.pipes.base import (
     validate_span_getter,
 )
 from edsnlp.pipes.misc.measurements import patterns
-from edsnlp.pipes.misc.tables import TablesMatcher
 from edsnlp.utils.filter import align_spans, filter_spans, get_span_group
 
 __all__ = ["MeasurementsMatcher"]
@@ -596,7 +595,6 @@ class MeasurementsMatcher(BaseNERComponent):
             ignore_excluded=ignore_excluded,
             ignore_space_tokens=True,
         )
-        self.table_matcher = TablesMatcher(nlp)
         for measure_config in measurements:
             name = measure_config["name"]
             unit = measure_config["unit"]
