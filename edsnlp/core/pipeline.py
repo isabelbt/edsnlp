@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 import warnings
 from enum import Enum
 from pathlib import Path
@@ -932,7 +933,7 @@ class Pipeline:
         self,
         name: Optional[str] = None,
         root_dir: Union[str, Path] = ".",
-        build_dir: Union[str, Path] = "build",
+        build_dir: Optional[Union[str, Path]] = None,
         dist_dir: Union[str, Path] = "dist",
         artifacts_name: str = "artifacts",
         check_dependencies: bool = False,
@@ -943,6 +944,7 @@ class Pipeline:
         config_settings: Optional[Mapping[str, Union[str, Sequence[str]]]] = None,
         isolation: bool = True,
         skip_build_dependency_check: bool = False,
+        readme_replacements: Dict[str, str] = {},
     ):
         from edsnlp.package import package
 
@@ -961,6 +963,7 @@ class Pipeline:
             config_settings=config_settings,
             isolation=isolation,
             skip_build_dependency_check=skip_build_dependency_check,
+            readme_replacements=readme_replacements,
         )
 
     def __getstate__(self):
@@ -1210,12 +1213,12 @@ def load_from_huggingface(
         new_mtime = max(os.path.getmtime(x) for x in Path(path).rglob("*"))
         should_install = new_mtime != mtime
 
+    pip = os.path.join(sysconfig.get_path("scripts"), "pip")
     if should_install or not any(
         p.startswith(module_name) and p.endswith(".dist-info") for p in os.listdir(path)
     ):
-        pip = os.path.join(*os.path.split(sys.executable)[:-1], "pip")
         subprocess.run(
-            [pip, "install", path, "--target", path, "--no-deps", "--upgrade"]
+            [pip, "install", "-e", path, "--target", path, "--no-deps", "--upgrade"]
         )
 
     if path not in sys.path:
@@ -1238,16 +1241,16 @@ def load_from_huggingface(
                 "to use the model:\n"
                 f"  pip install {' '.join((repr(str(dep)) for dep in missing_deps))}\n"
                 f"or let edsnlp do it \n"
-                f"  nlp = edsnlp.load('{repo_id}', install_dependencies=True)",
-                ImportWarning,
+                f"  nlp = edsnlp.load('{repo_id}', install_dependencies=True)\n"
+                f"You may need to restart your Python session after the installation.",
+                UserWarning,
             )
         else:
             warnings.warn(
                 "Installing missing dependencies:\n"
                 f"pip install {' '.join((repr(str(dep)) for dep in missing_deps))}",
-                ImportWarning,
+                UserWarning,
             )
-            pip = sys.executable.rsplit("/", 1)[0] + "/pip"
             subprocess.run([pip, "install", *(str(d) for d in missing_deps)])
     module = importlib.import_module(module_name)
     return module.load(**kwargs)

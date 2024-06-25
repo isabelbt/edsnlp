@@ -5,12 +5,40 @@
 ### Added
 
 - Added binary distribution for linux aarch64 (Streamlit's environment)
+- `data.set_processing(...)` now expose an `autocast` parameter to disable or tweak the automatic casting of the tensor
+  during the processing. Autocasting should result in a slight speedup, but may lead to numerical instability.
+- Use `torch.inference_mode` to disable view tracking and version counter bumps during inference.
 - Added new separator option in eds.table and new input check
 - Added tables processing in eds.measurement
 - Added 'all' as possible input in eds.measurement measurements config
 - Added new units in eds.measurement
 
 ### Changed
+
+### Fixed
+
+- `edsnlp.load("your/huggingface-model", install_dependencies=True)` now correctly resolves the python pip
+  (especially on Colab) to auto-install the model dependencies
+- We now better handle empty documents in the `eds.transformer`, `eds.text_cnn` and `eds.ner_crf` components
+
+## v0.12.3
+
+### Changed
+
+Packages:
+
+- Pip-installable models are now built with `hatch` instead of poetry, which allows us to expose `artifacts` (weights)
+  at the root of the sdist package (uploadable to HF) and move them inside the package upon installation to avoid conflicts.
+- Dependencies are no longer inferred with dill-magic (this didn't work well before anyway)
+- Option to perform substitutions in the model's README.md file (e.g., for the model's name, metrics, ...)
+- Huggingface models are now installed with pip *editable* installations, which is faster since it doesn't copy around the weights
+
+## v0.12.1
+
+### Added
+
+- Added binary distribution for linux aarch64 (Streamlit's environment)
+- Added new separator option in eds.table and new input check
 
 ### Fixed
 
