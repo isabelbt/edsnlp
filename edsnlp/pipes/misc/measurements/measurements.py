@@ -271,6 +271,10 @@ class MeasurementsMatcher(BaseNERComponent):
         been rigorously validated. If you come across a measurement expression that
         goes undetected, please file an issue !
 
+    Pipe definition
+    -----
+    --8<-- "docs/utilities/measurements-utils.md:components"
+
     Scope
     -----
     The `eds.measurements` matcher can extract simple (e.g. `3cm`) measurements.
@@ -282,16 +286,7 @@ class MeasurementsMatcher(BaseNERComponent):
     desired unit. Like for other components, the `span._.value` extension can also be
     used to access the normalized value for any measurement span.
 
-
-    The current matcher annotates the following measurements out of the box:
-
-    | Measurement name | Example                |
-    |------------------|------------------------|
-    | `size`           | `1m50`, `1.50m`        |
-    | `weight`         | `12kg`, `1kg300`       |
-    | `bmi`            | `BMI: 24`, `24 kg.m-2` |
-    | `volume`         | `2 cac`, `8ml`         |
-
+    See Availability section for details on which units are handled
 
     Examples
     --------
@@ -467,6 +462,7 @@ class MeasurementsMatcher(BaseNERComponent):
           instead, and assign all the parsed information (`._.date` / `._.duration`)
           to it. Otherwise, don't return the date.
 
+
     Authors and citation
     --------------------
     The `eds.measurements` pipeline was developed by AP-HP's Data Science team.
@@ -511,6 +507,7 @@ class MeasurementsMatcher(BaseNERComponent):
         self.all_measurements = (measurements == "all")
         if self.all_measurements:
             measurements = []
+
         # fmt: on
         if isinstance(measurements, str):
             measurements = [measurements]
@@ -573,6 +570,13 @@ class MeasurementsMatcher(BaseNERComponent):
             ignore_excluded=ignore_excluded,
             ignore_space_tokens=True,
         )
+
+        if self.all_measurements:
+            measurements = [
+                {"name": name, **common_measurement}
+                for name, common_measurement in patterns.common_measurements.items()
+            ]
+
         for measure_config in measurements:
             name = measure_config["name"]
             unit = measure_config["unit"]
