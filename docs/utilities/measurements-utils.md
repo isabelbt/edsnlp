@@ -2,6 +2,8 @@
 
 === All measurements
 ```python
+import edsnlp
+
 nlp = edsnlp.blank("eds")
 nlp.add_pipe("eds.sentences")
 nlp.add_pipe("eds.tables")
@@ -18,6 +20,8 @@ Acte réalisé par ... à 12h13"""
 ```
 === Custom measurements
 ```python
+import edsnlp
+
 nlp = edsnlp.blank("eds")
 nlp.add_pipe("eds.sentences")
 nlp.add_pipe("eds.tables")
@@ -40,6 +44,7 @@ Acte réalisé par ... à 12h13"""
 ```
 === Predefined measurements
 ```python
+import edsnlp
 nlp = edsnlp.blank("eds")
 nlp.add_pipe("eds.sentences")
 nlp.add_pipe("eds.tables")
