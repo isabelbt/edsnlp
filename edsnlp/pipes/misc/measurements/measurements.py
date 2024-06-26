@@ -272,8 +272,9 @@ class MeasurementsMatcher(BaseNERComponent):
         goes undetected, please file an issue !
 
     Pipe definition
-    -----
-    --8<-- "docs/utilities/measurements-utils.md:components"
+    ---------------
+
+    --8<-- "docs/utilities/measurements-utils.md:pipe-definition"
 
     Scope
     -----
@@ -462,6 +463,10 @@ class MeasurementsMatcher(BaseNERComponent):
           instead, and assign all the parsed information (`._.date` / `._.duration`)
           to it. Otherwise, don't return the date.
 
+    Availability
+    ------------
+    
+    --8<-- "docs/utilities/measurements-utils.md:availability_mes_units"
 
     Authors and citation
     --------------------
