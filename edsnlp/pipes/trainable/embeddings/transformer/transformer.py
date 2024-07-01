@@ -8,13 +8,19 @@ import tokenizers.normalizers
 import torch
 from confit import VisibleDeprecationWarning, validate_arguments
 from transformers import AutoModel, AutoTokenizer
-from transformers import BitsAndBytesConfig as BitsAndBytesConfig_
 from typing_extensions import Literal, TypedDict
 
 from edsnlp import Pipeline
 from edsnlp.core.torch_component import cached
 from edsnlp.pipes.trainable.embeddings.typing import WordEmbeddingComponent
 from edsnlp.utils.span_getters import SpanGetterArg
+
+try:
+    from transformers import BitsAndBytesConfig as BitsAndBytesConfig_
+
+    BitsAndBytesConfig = validate_arguments(BitsAndBytesConfig_)
+except ImportError:
+    BitsAndBytesConfig = None
 
 INITIAL_MAX_TOKENS_PER_DEVICE = 32 * 128
 TransformerBatchInput = TypedDict(
@@ -47,8 +53,6 @@ TransformerBatchOutput = TypedDict(
 embeddings: FoldedTensor
     The embeddings of the words
 """
-
-BitsAndBytesConfig = validate_arguments(BitsAndBytesConfig_)
 
 
 class Transformer(WordEmbeddingComponent[TransformerBatchInput]):
